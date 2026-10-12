@@ -136,6 +136,9 @@
         <a href="{% url 'collecte:import_home' %}" class="{% if active == 'imports' %}active{% endif %}">
           <span class="ico">⇪</span> Imports
         </a>
+        <a href="{% url 'qualite:batch_list' %}" class="{% if active == 'qualite' %}active{% endif %}">
+          <span class="ico">✓</span> Fiabilisation
+        </a>
         <a href="{% url 'dashboard:carte' %}" class="{% if active == 'cartes' %}active{% endif %}">
           <span class="ico">◈</span> Cartes
         </a>

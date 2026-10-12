@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Fiabilisation — DataInsight{% endblock %}
+{% block title_inner %}Fiabilisation des données{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><span class="current">Fiabilisation</span></nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .pill { display:inline-block; padding:2px 10px; border-radius:11px; font-size:12px; font-weight:600; }
+  .pill.DRAFT { background:#eef1f8; color:#556; }
+  .pill.PROG  { background:#fff3e0; color:#9a5a00; }
+  .pill.VALID { background:#e6f4ea; color:#1e7a34; }
+  .pill.ARCH  { background:#ececec; color:#777; }
+  .stage { color:#556; font-size:12px; }
+  .empty { color:#667; font-size:14px; padding:14px 0; }
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:14px; }
+  .msg.success { background:#e6f4ea; color:#1e7a34; border:1px solid #b7e0c1; }
+  .msg.error   { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}
+  {% for message in messages %}
+    <div class="msg {{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h2 style="margin:0;">Lots d'import</h2>
+    <a href="{% url 'qualite:batch_create' %}" class="btn">+ Nouveau lot</a>
+  </div>
+  <p class="muted">Chaque lot de données traverse les trois contrôles (complétude,
+     cohérence, valeurs atypiques) avant d'être validé. Clique un lot pour voir
+     ses versions et le détail des contrôles.</p>
+
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Lot</th><th>Secteur</th><th>Année</th>
+        <th>Statut</th><th>Version courante</th><th>Versions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="{% url 'qualite:batch_detail' r.batch.pk %}">{{ r.batch }}</a></td>
+        <td>{{ r.batch.get_sector_display }}</td>
+        <td>{{ r.batch.year }}</td>
+        <td><span class="pill {{ r.batch.status }}">{{ r.batch.get_status_display }}</span></td>
+        <td>
+          {% if r.version %}
+            V{{ r.version.number }} <span class="stage">({{ r.version.get_stage_display }})</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td>{{ r.versions_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">Aucun lot pour l'instant. Le dépôt d'un lot arrivera dans la
+     prochaine étape ; en attendant, on peut en créer un dans l'administration
+     (« Lots d'import »).</p>
+  {% endif %}
+</div>
+{% endblock %}

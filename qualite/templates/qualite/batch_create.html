@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Nouveau lot — DataInsight{% endblock %}
+{% block title_inner %}Nouveau lot d'import{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{% url 'qualite:batch_list' %}">Fiabilisation</a>
+  <span class="sep">›</span><span class="current">Nouveau lot</span>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:14px; }
+  .msg.error { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .field { margin-bottom:16px; max-width:360px; }
+  .field label { display:block; font-size:13px; color:#556; margin-bottom:5px; font-weight:600; }
+  .field select, .field input {
+    width:100%; padding:9px 11px; border:1px solid #c3ccdd; border-radius:6px;
+    font-size:14px; background:#fff;
+  }
+  .hint { color:#667; font-size:13px; margin-top:4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}
+  {% for message in messages %}
+    <div class="msg {{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="card">
+  <h2>Déposer un lot</h2>
+  <p class="muted">Un lot regroupe les données d'un secteur pour une année, et les
+     fait passer par les trois contrôles. Les données sont supposées déjà
+     importées (par les écrans d'import). Le dépôt direct d'un fichier viendra
+     avec le template structuré.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="field">
+      <label for="sector">Secteur</label>
+      <select name="sector" id="sector" required>
+        {% for code, label in sectors %}
+          <option value="{{ code }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="year">Année couverte</label>
+      <input type="number" name="year" id="year" min="2000" max="2100"
+             value="{{ default_year }}" required>
+      <div class="hint">Les contrôles porteront sur les données de cette année.</div>
+    </div>
+    <button type="submit" class="btn">Créer le lot</button>
+    <a href="{% url 'qualite:batch_list' %}" class="btn secondary">Annuler</a>
+  </form>
+</div>
+{% endblock %}

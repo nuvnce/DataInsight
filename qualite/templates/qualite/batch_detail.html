@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ batch }} — DataInsight{% endblock %}
+{% block title_inner %}{{ batch }}{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{% url 'qualite:batch_list' %}">Fiabilisation</a>
+  <span class="sep">›</span><span class="current">Lot #{{ batch.pk }}</span>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .meta { display:flex; gap:28px; flex-wrap:wrap; margin-bottom:4px; }
+  .meta .k { color:#667; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  .meta .v { font-size:15px; color:var(--navy); font-weight:600; }
+  .res { display:inline-block; padding:2px 10px; border-radius:11px; font-size:12px; font-weight:600; }
+  .res.PASS { background:#e6f4ea; color:#1e7a34; }
+  .res.WARN { background:#fff3e0; color:#9a5a00; }
+  .res.FAIL { background:#fdecea; color:#b3261e; }
+  .res.none { background:#eef1f8; color:#889; }
+  .ck-score { font-size:12px; color:#556; display:block; margin-top:3px; }
+  .ver-stage { color:#556; font-size:12px; }
+  td.ck { text-align:center; }
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:14px; }
+  .msg.success { background:#e6f4ea; color:#1e7a34; border:1px solid #b7e0c1; }
+  .msg.error   { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .toolbar { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+  .pend { color:#9a5a00; font-size:12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}
+  {% for message in messages %}
+    <div class="msg {{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="card">
+  <h2>Informations du lot</h2>
+  <div class="meta">
+    <div><div class="k">Secteur</div><div class="v">{{ batch.get_sector_display }}</div></div>
+    <div><div class="k">Année</div><div class="v">{{ batch.year }}</div></div>
+    <div><div class="k">Statut</div><div class="v">{{ batch.get_status_display }}</div></div>
+    <div><div class="k">Origine</div><div class="v">{{ batch.source_kind }}</div></div>
+    <div><div class="k">Déposé par</div><div class="v">{{ batch.submitted_by.get_username }}</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Versions et contrôles</h2>
+  <p class="muted">Une version par passage du pipeline. Les trois colonnes
+     montrent le résultat de chaque contrôle sur la version.</p>
+
+  {% if versions %}
+  <table>
+    <thead>
+      <tr>
+        <th>Version</th><th>Étape</th>
+        {% for s in steps %}<th>{{ s }}</th>{% endfor %}
+        <th>À traiter</th><th>Produite le</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in versions %}
+      <tr>
+        <td>V{{ v.version.number }}</td>
+        <td><span class="ver-stage">{{ v.version.get_stage_display }}</span></td>
+        {% for c in v.checks %}
+        <td class="ck">
+          {% if c %}
+            <span class="res {{ c.result }}">{{ c.get_result_display }}</span>
+            {% if c.score is not None %}<span class="ck-score">{{ c.score }} %</span>{% endif %}
+            {% if c.anomalies_count %}<span class="ck-score">{{ c.anomalies_count }} anomalie(s)</span>{% endif %}
+          {% else %}
+            <span class="res none">non lancé</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+        <td class="ck">
+          {% if v.pending %}
+            <a href="{% url 'qualite:version_anomalies' v.version.pk %}" class="pend">{{ v.pending }} à traiter</a>
+          {% else %}
+            <a href="{% url 'qualite:version_anomalies' v.version.pk %}" class="muted">voir</a>
+          {% endif %}
+        </td>
+        <td>{{ v.version.created_at|date:"d/m/Y H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Ce lot n'a pas encore de version.</p>
+  {% endif %}
+
+  <div class="toolbar">
+    <form method="post" action="{% url 'qualite:run_checks' batch.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn">▶ Lancer les trois contrôles</button>
+    </form>
+    {% if batch.current_version %}
+      <a href="{% url 'qualite:version_anomalies' batch.current_version.pk %}" class="btn secondary">Traiter les anomalies</a>
+    {% endif %}
+  </div>
+  <p class="muted" style="margin-top:10px;">
+    Les contrôles s'exécutent sur les données déjà importées pour l'année
+    {{ batch.year }}. Relancer rejoue les trois contrôles sur la version courante.
+  </p>
+</div>
+{% endblock %}

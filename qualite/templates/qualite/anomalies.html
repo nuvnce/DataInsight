@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Anomalies V{{ version.number }} — DataInsight{% endblock %}
+{% block title_inner %}Anomalies — {{ batch }} · V{{ version.number }}{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{% url 'qualite:batch_list' %}">Fiabilisation</a>
+  <span class="sep">›</span>
+  <a href="{% url 'qualite:batch_detail' batch.pk %}">Lot #{{ batch.pk }}</a>
+  <span class="sep">›</span><span class="current">Anomalies V{{ version.number }}</span>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:14px; }
+  .msg.success { background:#e6f4ea; color:#1e7a34; border:1px solid #b7e0c1; }
+  .msg.error   { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .kind { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .kind.MISS { background:#eef1f8; color:#3a5aa0; }
+  .kind.INCO { background:#fdecea; color:#b3261e; }
+  .kind.OUTL { background:#fff3e0; color:#9a5a00; }
+  .dec { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .dec.PEND { background:#fff3e0; color:#9a5a00; }
+  .dec.CORR { background:#e6f4ea; color:#1e7a34; }
+  .dec.VERIF { background:#eef1f8; color:#556; }
+  .dec.ACCEPT { background:#e9e6f4; color:#5a3a9a; }
+  table.anom { font-size:12px; }
+  table.anom td, table.anom th { padding:6px 8px; vertical-align:top; }
+  .sugg { color:#1e7a34; font-weight:600; }
+  .decide-form { display:flex; gap:5px; align-items:center; flex-wrap:wrap; }
+  .decide-form select, .decide-form input {
+    padding:5px 7px; border:1px solid #c3ccdd; border-radius:5px; font-size:12px;
+  }
+  .decide-form input.val { width:72px; }
+  .decide-form input.just { width:120px; }
+  .decide-form button { padding:5px 11px; font-size:12px; }
+  .summary { display:flex; gap:24px; margin-bottom:6px; }
+  .summary .n { font-size:22px; font-weight:700; color:var(--navy); }
+  .summary .l { font-size:12px; color:#667; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}
+  {% for message in messages %}
+    <div class="msg {{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="card">
+  <div class="summary">
+    <div><div class="n">{{ counts.total }}</div><div class="l">anomalies</div></div>
+    <div><div class="n">{{ counts.pending }}</div><div class="l">à traiter</div></div>
+  </div>
+  <p class="muted">Pour chaque anomalie, décide : corriger (avec la valeur
+     suggérée ou la tienne), accepter avec justification, ou marquer à vérifier.
+     Rien n'est écrit dans les données tant que la version n'est pas signée —
+     ici on enregistre les décisions.</p>
+</div>
+
+<div class="card">
+  <h2>Liste des anomalies</h2>
+  {% if anomalies %}
+  <table class="anom">
+    <thead>
+      <tr>
+        <th>Type</th><th>Unité</th><th>Période</th><th>Élément</th>
+        <th>Observé</th><th>Suggéré</th><th>Description</th>
+        <th>Décision</th><th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in anomalies %}
+      <tr>
+        <td><span class="kind {{ a.kind }}">{{ a.get_kind_display }}</span></td>
+        <td>{% if a.org_unit %}{{ a.org_unit.name }}{% else %}—{% endif %}</td>
+        <td>{{ a.period }}</td>
+        <td>{% if a.data_element %}{{ a.data_element.code }}{% else %}—{% endif %}</td>
+        <td>{% if a.observed_value is not None %}{{ a.observed_value }}{% else %}—{% endif %}</td>
+        <td>
+          {% if a.suggested_value is not None %}
+            <span class="sugg">{{ a.suggested_value }}</span>
+            {% if a.suggestion_method %}<br><span class="muted" style="font-size:11px;">{{ a.suggestion_method }}</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td style="max-width:200px;">{{ a.description }}</td>
+        <td><span class="dec {{ a.decision }}">{{ a.get_decision_display }}</span>
+            {% if a.decided_value is not None %}<br><span class="muted" style="font-size:11px;">→ {{ a.decided_value }}</span>{% endif %}
+        </td>
+        <td>
+          <form method="post" action="{% url 'qualite:decide_anomaly' a.pk %}" class="decide-form">
+            {% csrf_token %}
+            <select name="decision">
+              {% for code, label in decisions %}
+                <option value="{{ code }}" {% if a.decision == code %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <input type="text" name="decided_value" class="val" placeholder="valeur"
+                   value="{% if a.decided_value is not None %}{{ a.decided_value }}{% endif %}">
+            <input type="text" name="justification" class="just" placeholder="justif."
+                   value="{{ a.justification }}">
+            <button type="submit" class="btn">OK</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Aucune anomalie sur cette version. Si tu n'as pas encore
+     lancé les contrôles, retourne au lot et clique « Lancer les trois contrôles ».</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Signer la version</h2>
+  <p class="muted">La signature fige cette version comme finale et passe le lot
+     en « validé ». Possible seulement quand toutes les anomalies sont traitées
+     ({{ counts.pending }} restante(s)).</p>
+  <form method="post" action="{% url 'qualite:sign_version' version.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn" {% if counts.pending %}disabled style="opacity:.5;cursor:not-allowed;"{% endif %}>
+      ✓ Signer V{{ version.number }} comme version finale
+    </button>
+  </form>
+</div>
+{% endblock %}
