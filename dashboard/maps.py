@@ -31,13 +31,93 @@ def _districts_with_geometry():
 
 @login_required
 def carte(request):
-    """Page de cartographie."""
+    """Page de cartographie unifiée (onglets internes)."""
+    all_periods = sorted(set(DataValue.objects.values_list("period", flat=True)), reverse=True)
+    years = sorted({p[:4] for p in all_periods if len(p) >= 4}, reverse=True)
     context = {
         "elements": DataElement.objects.order_by("name"),
         "indicators": Indicator.objects.order_by("name"),
+        "all_periods": all_periods,
+        "years": years,
         "active": "cartes",
     }
     return render(request, "dashboard/carte.html", context)
+
+
+@login_required
+def carte_stats(request):
+    """Bandeau de synthèse : districts rapportant, couples district-mois, taux, plage."""
+    from qualite import consolidation as K
+
+    year = request.GET.get("year")
+    periods_list = sorted(set(DataValue.objects.values_list("period", flat=True)))
+    if year:
+        periods_list = [p for p in periods_list if p.startswith(year)]
+
+    n_districts = OrgUnit.objects.filter(level=3).count()
+    # couples (district, mois) ayant au moins une valeur
+    reported = set()
+    scores = []
+    for p in periods_list:
+        rows = K.completeness_by_district(p)
+        for r in rows:
+            if r["reported"] > 0:
+                reported.add((r["district_id"], p))
+            if r["score"] is not None:
+                scores.append(r["score"])
+    overall = round(sum(scores) / len(scores), 1) if scores else None
+    span = (f"{min(periods_list)} → {max(periods_list)}" if periods_list else "—")
+
+    return JsonResponse({
+        "districts": n_districts,
+        "district_months": len(reported),
+        "overall_rate": overall,
+        "span": span,
+    })
+
+
+@login_required
+def carte_monthly(request):
+    """
+    Grille mensuelle : pour une année, un GeoJSON par mois (01→12), coloré par
+    complétude du district, plus le % national du mois. Les mois sans aucune
+    donnée sont marqués has_data=false.
+    """
+    from qualite import consolidation as K
+
+    year = request.GET.get("year")
+    if not year:
+        years = sorted({p[:4] for p in DataValue.objects.values_list("period", flat=True) if len(p) >= 4})
+        year = years[-1] if years else None
+
+    districts = list(_districts_with_geometry())
+    present_periods = set(DataValue.objects.filter(period__startswith=str(year))
+                          .values_list("period", flat=True)) if year else set()
+
+    months = []
+    for m in range(1, 13):
+        per = f"{year}{m:02d}"
+        has_data = per in present_periods
+        feats = []
+        if has_data:
+            rows = {r["district_id"]: r for r in K.completeness_by_district(per, districts=districts)}
+            for ou in districts:
+                r = rows.get(ou.id)
+                val = r["score"] if r else None
+                feats.append(_feature(ou, val))
+            national = K.national_completeness(per, districts=districts)
+        else:
+            for ou in districts:
+                feats.append(_feature(ou, None))
+            national = None
+        months.append({
+            "month": m, "period": per, "has_data": has_data,
+            "national": national,
+            "geojson": {"type": "FeatureCollection", "features": feats},
+        })
+
+    return JsonResponse({"year": year, "months": months,
+                         "unit": "%", "label": "Complétude"})
 
 
 @login_required
@@ -114,3 +194,63 @@ def _feature(ou, value):
         "geometry": geom,
         "properties": {"name": ou.name, "value": value},
     }
+
+
+# ---------------------------------------------------------------------------
+#  Données des cartes par indicateur (consolidées) — utilisé par l'onglet
+#  « Carte par indicateur » de la page Cartes unifiée.
+# ---------------------------------------------------------------------------
+@login_required
+def carte_couche2_data(request):
+    """
+    GeoJSON des districts coloré selon le mode couche 2.
+
+    mode=letalite | positivite | incidence  -> indicateur consolidé (consolidation)
+    mode=completude                          -> % de complétude du dernier contrôle
+    period=<code>                            -> période (obligatoire pour les indicateurs)
+    """
+    from qualite import consolidation as K
+    from qualite.models import QualityCheck
+
+    mode = request.GET.get("mode", "letalite")
+    period = request.GET.get("period") or None
+    districts = _districts_with_geometry()
+
+    features, scale = [], []
+    unit = {"letalite": "%", "positivite": "%", "incidence": "‰", "completude": "%"}.get(mode, "")
+    label = {"letalite": "Létalité", "positivite": "Taux de positivité",
+             "incidence": "Incidence", "completude": "Complétude"}.get(mode, mode)
+
+    if mode == "completude":
+        # dernière complétude connue par district (via les anomalies localisées
+        # n'est pas nécessaire : on prend le score du dernier QualityCheck COMP).
+        last = (QualityCheck.objects
+                .filter(step=QualityCheck.Step.COMPLETENESS, score__isnull=False)
+                .order_by("-created_at").first())
+        score = float(last.score) if last else None
+        for ou in districts:
+            # score global de complétude (même valeur partout faute de score par
+            # district dans le modèle actuel) — informatif.
+            features.append(_feature(ou, score))
+            if score is not None:
+                scale.append(score)
+    else:
+        rows = {r.district_id: r for r in K.district_table(period)} if period else {}
+        for ou in districts:
+            r = rows.get(ou.id)
+            value = None
+            if r is not None:
+                v = getattr(r, mode, None)
+                value = float(v) if v is not None else None
+            features.append(_feature(ou, value))
+            if value is not None:
+                scale.append(value)
+
+    vmin = min(scale) if scale else 0
+    vmax = max(scale) if scale else 0
+    return JsonResponse({
+        "type": "FeatureCollection",
+        "features": features,
+        "meta": {"label": label, "unit": unit, "vmin": vmin, "vmax": vmax,
+                 "period": periods.label(period) if period else "—"},
+    })

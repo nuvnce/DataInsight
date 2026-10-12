@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Convertir DHIS2 — DataInsight{% endblock %}
+{% block title_inner %}Convertir un export DHIS2{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="{% url 'collecte:import_home' %}">Imports</a>
+  <span class="sep">›</span><span class="current">Convertir DHIS2</span></nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  input[type=file]{ padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; }
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:13px; color:#556; margin-bottom:5px; font-weight:600; }
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:10px; font-size:14px; }
+  .msg.error { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .msg.info { background:#eaf0fb; color:#1f3864; border:1px solid #c3d3ef; }
+  .hint { color:#667; font-size:13px; }
+  .collist { font-size:12px; color:#556; max-height:160px; overflow:auto; margin-top:6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+
+<div class="card">
+  <h2>Export DHIS2 → modèle de collecte</h2>
+  <p class="hint">Charge une extraction DHIS2 « large ». Le système agrège au
+     district, sépare Public / Privé, somme les sources hospitalières (HD_/HH_)
+     en <strong>HOSP</strong> et les décès (H_Info) en <strong>DECES</strong>,
+     et te renvoie un <strong>modèle rempli</strong> à télécharger. Tu le relis,
+     tu complètes si besoin, puis tu l'importes via « Importer un modèle rempli ».</p>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="field">
+      <label for="file">Fichier export DHIS2 (.xlsx)</label>
+      <input type="file" name="file" id="file" accept=".xlsx" required>
+    </div>
+    <button type="submit" class="btn">Convertir et télécharger</button>
+    <a href="{% url 'collecte:import_home' %}" class="btn secondary">Retour</a>
+  </form>
+
+  {% if report %}
+    <div class="msg error" style="margin-top:14px;">
+      Problèmes : {{ report.errors|join:" ; " }}
+    </div>
+    {% if report.columns_unknown %}
+    <details><summary>Colonnes non reconnues ({{ report.columns_unknown|length }})</summary>
+      <div class="collist">{% for c in report.columns_unknown %}{{ c }}<br>{% endfor %}</div>
+    </details>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

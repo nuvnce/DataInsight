@@ -82,8 +82,8 @@ SECTEURS = [
 # Simple pour l'instant : communautaire vs formation sanitaire.
 MILIEUX = [
     ("COMM", ["asc", "communautaire", "niveau communautaire"]),
-    ("FS",   ["c_ext", "consultation externe", "usp"]),
-    # Pour affiner plus tard : ajouter HD, HH... ici ET dans seed_dimensions.
+    ("HOSP", ["hd_", "hh_", "hospital"]),   # services hospitaliers (HD_/HH_)
+    ("FS",   ["c_ext", "consultation externe", "usp", "h_info", "parasito", "smi"]),
 ]
 
 
@@ -151,6 +151,15 @@ INDICATORS = [
     IndicatorRule(
         code="TRAITE_CTA", label="Cas confirmés traités avec CTA",
         requires=["traite", "cta"], excludes=[], priority=10,
+    ),
+    # --- Hospitalisés (cas graves pris en charge en milieu hospitalier) ---
+    # Les colonnes HD_/HH_ portent « Paludisme grave {forme ...} », sans mot
+    # « refere » ni « confirme » : on les capte par « grave » + préfixe hôpital.
+    # Plusieurs colonnes par secteur → le convertisseur les SOMME en HOSP.
+    IndicatorRule(
+        code="HOSP", label="Cas graves hospitalisés (paludisme)",
+        requires=["paludisme grave"], excludes=["refere", "confirme", "communautaire"],
+        priority=6,
     ),
     # --- Décès ---
     IndicatorRule(

@@ -425,14 +425,120 @@ def import_dhis2_page(request):
 
 
 # ---------------------------------------------------------------------------
+#  Convertisseur DHIS2 → modèle de collecte (Bloc A)
+# ---------------------------------------------------------------------------
+@login_required
+def convert_dhis2_page(request):
+    """
+    Charge un export DHIS2 et renvoie le classeur au format du modèle de
+    collecte (agrégé au district, Public/Privé), à télécharger. L'humain le
+    relit/complète, puis l'importe via « Import du modèle rempli ».
+    """
+    import os, tempfile
+    from django.http import FileResponse
+    from .dhis2_to_template import convert
+
+    context = {"report": None}
+
+    if request.method == "POST":
+        upload = request.FILES.get("file")
+        if not upload:
+            messages.error(request, "Veuillez sélectionner un fichier .xlsx.")
+            return render(request, "collecte/convert_dhis2.html", context)
+
+        tmp_in = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+        for chunk in upload.chunks():
+            tmp_in.write(chunk)
+        tmp_in.close()
+        tmp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+        tmp_out.close()
+
+        try:
+            report = convert(tmp_in.name, tmp_out.name)
+            if report.errors:
+                context["report"] = report.as_dict()
+                messages.error(request, "Conversion impossible : " + " ; ".join(report.errors))
+                return render(request, "collecte/convert_dhis2.html", context)
+            # on renvoie le fichier converti en téléchargement
+            resp = FileResponse(open(tmp_out.name, "rb"),
+                                as_attachment=True, filename="modele_rempli.xlsx")
+            resp["X-Convert-Districts"] = str(report.districts)
+            return resp
+        except Exception as e:
+            messages.error(request, f"Erreur pendant la conversion : {e}")
+            return render(request, "collecte/convert_dhis2.html", context)
+        finally:
+            os.unlink(tmp_in.name)
+            # tmp_out est tenu ouvert par FileResponse ; nettoyé par l'OS au besoin
+
+    return render(request, "collecte/convert_dhis2.html", context)
+
+
+# ---------------------------------------------------------------------------
+#  Import d'un modèle de collecte rempli (Bloc A)
+# ---------------------------------------------------------------------------
+@login_required
+def import_template_page(request):
+    """Charge un modèle rempli (Public/Privé) et écrit les DataValue."""
+    import os, tempfile
+    from .template_import import import_template
+
+    context = {"report": None}
+
+    if request.method == "POST":
+        upload = request.FILES.get("file")
+        dry = request.POST.get("dry_run") == "1"
+        if not upload:
+            messages.error(request, "Veuillez sélectionner un fichier .xlsx.")
+            return render(request, "collecte/import_template.html", context)
+
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+        for chunk in upload.chunks():
+            tmp.write(chunk)
+        tmp.close()
+        try:
+            report = import_template(tmp.name, save=not dry)
+            context["report"] = report.as_dict()
+            if report.errors:
+                messages.warning(request, "Import terminé avec des remarques, voir le rapport.")
+            elif dry:
+                messages.info(request, f"Simulation : {report.rows} valeurs seraient importées.")
+            else:
+                messages.success(request, f"{report.saved} valeurs importées.")
+            if report.unknown_districts:
+                messages.warning(
+                    request,
+                    f"{len(report.unknown_districts)} district(s) non reconnu(s) : "
+                    f"{', '.join(sorted(report.unknown_districts)[:5])}…")
+        except Exception as e:
+            messages.error(request, f"Erreur pendant l'import : {e}")
+        finally:
+            os.unlink(tmp.name)
+
+    return render(request, "collecte/import_template.html", context)
+
+
+# ---------------------------------------------------------------------------
 #  Accueil des imports (brique 5a) — liste les types d'import disponibles
 # ---------------------------------------------------------------------------
 def import_home(request):
     """Page d'accueil de la section Imports : une tuile par type d'import."""
     types_import = [
         {
-            "titre": "Extraction DHIS2 (routine)",
-            "desc": "Importer un export DHIS2 en largeur (données de routine paludisme).",
+            "titre": "Convertir un export DHIS2 → modèle",
+            "desc": "Transformer une extraction DHIS2 en modèle de collecte (agrégé district, Public/Privé) à relire puis importer.",
+            "url_name": "collecte:convert_dhis2",
+            "dispo": True,
+        },
+        {
+            "titre": "Importer un modèle rempli",
+            "desc": "Charger un modèle de collecte rempli (Public/Privé) dans la base, prêt pour la fiabilisation.",
+            "url_name": "collecte:import_template",
+            "dispo": True,
+        },
+        {
+            "titre": "Extraction DHIS2 (direct)",
+            "desc": "Importer un export DHIS2 en largeur directement en base (sans passer par le modèle).",
             "url_name": "collecte:import_dhis2",
             "dispo": True,
         },

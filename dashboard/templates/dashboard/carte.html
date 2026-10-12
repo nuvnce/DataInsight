@@ -1,165 +1,313 @@
 {% extends "base.html" %}
 {% block title %}Cartes — DataInsight{% endblock %}
-{% block title_inner %}Cartographie{% endblock %}
+{% block title_inner %}Cartographie du paludisme{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><span class="current">Cartes</span></nav>
+{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <style>
-  .map-controls { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }
-  .map-controls .field { display:flex; flex-direction:column; gap:4px; }
-  .map-controls label { font-size:13px; color:var(--blue); font-weight:600; }
-  .map-controls select { padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; min-width:220px; }
-  #map { height:560px; border-radius:8px; border:1px solid var(--line); background:#fff; }
-  .map-legend {
-    background:#fff; padding:10px 12px; border-radius:6px; line-height:18px;
-    box-shadow:0 1px 4px rgba(0,0,0,.15); font-size:12px; color:#333;
-  }
+  /* --- Bandeau de synthèse (pilules) --- */
+  .pills { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
+  .pill { border:1px solid var(--line); border-radius:22px; padding:7px 16px;
+          background:#fff; font-size:13px; color:#445; display:flex; gap:8px; align-items:baseline; }
+  .pill b { font-size:15px; color:var(--navy); font-weight:700; }
+  .pill.rate b { color:#1e7a34; }
+
+  /* --- Onglets --- */
+  .tabs { display:flex; gap:2px; border-bottom:2px solid var(--line); margin-bottom:18px; flex-wrap:wrap; }
+  .tab { padding:10px 18px; font-size:14px; color:#667; cursor:pointer; border:none;
+         background:none; border-bottom:2px solid transparent; margin-bottom:-2px; }
+  .tab:hover { color:var(--navy); }
+  .tab.on { color:var(--navy); font-weight:600; border-bottom-color:var(--accent); }
+  .panel { display:none; }
+  .panel.on { display:block; }
+
+  /* --- Contrôles --- */
+  .controls { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }
+  .controls .fld { display:flex; flex-direction:column; gap:4px; }
+  .controls label { font-size:12px; color:var(--blue); font-weight:600; }
+  .controls select { padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; min-width:180px; }
+
+  /* --- Palette picker --- */
+  .palettes { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .pal { border:2px solid transparent; border-radius:6px; padding:3px; cursor:pointer; display:flex; align-items:center; gap:6px; background:#fff; }
+  .pal.on { border-color:var(--navy); }
+  .pal .sw { display:flex; }
+  .pal .sw i { width:13px; height:16px; display:block; }
+  .pal span { font-size:11px; color:#556; padding-right:6px; }
+
+  /* --- Grille mensuelle --- */
+  .month-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; }
+  @media (max-width:980px){ .month-grid { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:560px){ .month-grid { grid-template-columns:1fr; } }
+  .mcard { border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; }
+  .mcard .hd { background:var(--navy); color:#fff; font-size:12px; font-weight:600;
+               text-align:center; padding:6px; letter-spacing:.03em; text-transform:uppercase; }
+  .mcard .mini { height:150px; background:#eef1f7; position:relative; }
+  .mcard .nat { position:absolute; right:6px; bottom:4px; font-size:13px; font-weight:700;
+                color:var(--navy); background:rgba(255,255,255,.85); padding:1px 6px; border-radius:4px; z-index:500; }
+  .mcard.empty .mini { display:flex; align-items:center; justify-content:center; color:#aab; font-size:12px; text-align:center; padding:0 10px; }
+
+  /* --- Carte principale (onglet indicateur) --- */
+  #map { height:540px; border-radius:8px; border:1px solid var(--line); background:#eef1f7; }
+  .map-legend { background:#fff; padding:10px 12px; border-radius:6px; line-height:18px; box-shadow:0 1px 4px rgba(0,0,0,.15); font-size:12px; color:#333; }
   .map-legend i { width:16px; height:16px; float:left; margin-right:8px; opacity:.85; }
   .map-legend .title { font-weight:600; margin-bottom:6px; color:var(--navy); }
-  .leaflet-tooltip.district { font-size:13px; }
   .leaflet-tooltip.district b { color:var(--navy); }
-  .map-empty { padding:14px; color:var(--muted); font-size:14px; }
+  .note { font-size:12px; color:#9a5a00; margin-top:10px; }
+  .empty { color:#667; padding:14px 0; }
+  .dl-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  @media (max-width:760px){ .dl-grid { grid-template-columns:1fr; } }
+  .dl-card { border:1px solid var(--line); border-radius:8px; padding:16px; background:#fff; }
+  .dl-card h3 { margin:0 0 6px; font-size:14px; color:var(--navy); }
+  .dl-card p { margin:0; font-size:13px; color:#667; }
 </style>
 {% endblock %}
 
 {% block content %}
-  <div class="card">
-    <div class="map-controls">
-      <div class="field">
-        <label for="mode">Type de donnée</label>
-        <select id="mode">
-          <option value="volume">Volume (nombre)</option>
-          <option value="indicator">Indicateur (taux)</option>
+<div class="card">
+  <div class="pills" id="pills">
+    <div class="pill">Districts <b id="p-dist">—</b></div>
+    <div class="pill">District-mois rapportés <b id="p-dm">—</b></div>
+    <div class="pill rate">Taux global <b id="p-rate">—</b></div>
+    <div class="pill">Période <b id="p-span">—</b></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="mensuel">Cartes mensuelles</button>
+    <button class="tab" data-tab="indicateur">Carte par indicateur</button>
+    <button class="tab" data-tab="telecharge">Téléchargements</button>
+  </div>
+
+  <!-- ===== Onglet : grille mensuelle ===== -->
+  <div class="panel on" id="panel-mensuel">
+    <div class="controls">
+      <div class="fld">
+        <label for="year">Année</label>
+        <select id="year">
+          {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
         </select>
       </div>
-      <div class="field" id="element-field">
-        <label for="element">Élément</label>
-        <select id="element">
-          {% for de in elements %}<option value="{{ de.code }}">{{ de.name }}</option>{% endfor %}
+    </div>
+    <div class="palettes" id="palettes"></div>
+    <div class="month-grid" id="month-grid"></div>
+    <p class="note" id="monthly-empty" style="display:none;">Aucune frontière de
+       district chargée. Lance la commande <code>load_boundaries</code>.</p>
+  </div>
+
+  <!-- ===== Onglet : carte par indicateur ===== -->
+  <div class="panel" id="panel-indicateur">
+    <div class="controls">
+      <div class="fld">
+        <label for="imode">Indicateur</label>
+        <select id="imode">
+          <option value="letalite">Létalité (%)</option>
+          <option value="positivite">Taux de positivité (%)</option>
+          <option value="incidence">Incidence (‰)</option>
+          <option value="completude">Complétude (%)</option>
         </select>
       </div>
-      <div class="field" id="indicator-field" style="display:none;">
-        <label for="indicator">Indicateur</label>
-        <select id="indicator">
-          {% for ind in indicators %}<option value="{{ ind.code }}">{{ ind.name }}</option>{% endfor %}
+      <div class="fld" id="iperiod-fld">
+        <label for="iperiod">Période</label>
+        <select id="iperiod">
+          {% for p in all_periods %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
         </select>
       </div>
-      <div class="field">
-        <label for="period">Période</label>
-        <select id="period"><option value="">Toutes périodes</option></select>
-      </div>
-      <button class="btn" id="refresh">Afficher</button>
+      <button class="btn" id="irefresh">Afficher</button>
     </div>
     <div id="map"></div>
-    <div id="msg" class="map-empty" style="display:none;"></div>
+    <p class="note">La létalité utilise les décès « toutes causes ».</p>
   </div>
+
+  <!-- ===== Onglet : téléchargements ===== -->
+  <div class="panel" id="panel-telecharge">
+    <div class="dl-grid">
+      <div class="dl-card">
+        <h3>Tableau récapitulatif</h3>
+        <p>Le récap par district est disponible dans la section
+           <a href="{% url 'qualite:recap' %}">Statistiques</a>.</p>
+      </div>
+      <div class="dl-card">
+        <h3>Export des données</h3>
+        <p>Les imports et exports Excel se font depuis la section
+           <a href="{% url 'collecte:import_home' %}">Imports</a>.</p>
+      </div>
+      <div class="dl-card">
+        <h3>Images des cartes (PNG)</h3>
+        <p>À venir : export PNG de la grille mensuelle, comme le repository de
+           référence.</p>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 (function () {
-  const map = L.map('map', { scrollWheelZoom: true }).setView([8.6, 1.0], 7);
-  // Fond neutre : pas de tuiles, juste un fond clair et les districts.
-  map.getContainer().style.background = '#eef1f7';
+  // ---- Palettes ----
+  const PALETTES = {
+    "Bleus":        ['#eef3fb','#cfe0f3','#9dc0e6','#5f97d3','#2e5496','#1f3864'],
+    "Rouge→Vert":   ['#d73027','#fc8d59','#fee08b','#d9ef8b','#91cf60','#1a9850'],
+    "Jaune→Bleu":   ['#ffffcc','#c7e9b4','#7fcdbb','#41b6c4','#2c7fb8','#253494'],
+    "Oranges":      ['#fff5eb','#fdd0a2','#fdae6b','#fd8d3c','#e6550d','#a63603'],
+    "Spectral":     ['#d53e4f','#fc8d59','#fee08b','#e6f598','#99d594','#3288bd'],
+  };
+  let currentPalette = "Rouge→Vert";   // style du repository de référence
 
-  let layer = null;
-  const dataUrl = "{% url 'dashboard:carte_data' %}";
-
-  // Palette séquentielle (clair -> foncé) façon santé publique
-  const RAMP = ['#eef3fb', '#cfe0f3', '#9dc0e6', '#5f97d3', '#2e5496', '#1f3864'];
-
+  function ramp() { return PALETTES[currentPalette]; }
   function colorFor(v, vmin, vmax) {
-    if (v === null || v === undefined) return '#d9dee8';   // gris = pas de donnée
-    if (vmax <= vmin) return RAMP[RAMP.length - 1];
+    const R = ramp();
+    if (v === null || v === undefined) return '#e0e4ea';
+    if (vmax <= vmin) return R[R.length - 1];
     const t = (v - vmin) / (vmax - vmin);
-    return RAMP[Math.min(RAMP.length - 1, Math.floor(t * RAMP.length))];
+    return R[Math.min(R.length - 1, Math.floor(t * R.length))];
   }
 
-  function fmt(v, unit) {
-    if (v === null || v === undefined) return 'aucune donnée';
-    const n = Math.round(v * (unit === '%' ? 10 : 1)) / (unit === '%' ? 10 : 1);
-    return n.toLocaleString('fr-FR') + (unit ? ' ' + unit : '');
+  // ---- Bandeau de synthèse ----
+  function loadStats(year) {
+    const url = "{% url 'dashboard:carte_stats' %}" + (year ? "?year=" + year : "");
+    fetch(url).then(r => r.json()).then(s => {
+      document.getElementById('p-dist').textContent = s.districts;
+      document.getElementById('p-dm').textContent = s.district_months;
+      document.getElementById('p-rate').textContent = (s.overall_rate === null ? '—' : s.overall_rate + ' %');
+      document.getElementById('p-span').textContent = s.span;
+    }).catch(() => {});
   }
 
-  let legend = null;
-  function drawLegend(meta) {
-    if (legend) map.removeControl(legend);
-    legend = L.control({ position: 'bottomright' });
-    legend.onAdd = function () {
-      const div = L.DomUtil.create('div', 'map-legend');
-      let html = '<div class="title">' + meta.label + '</div>';
-      const vmin = meta.vmin, vmax = meta.vmax, steps = RAMP.length;
-      if (vmax > vmin) {
-        for (let i = 0; i < steps; i++) {
-          const from = vmin + (i / steps) * (vmax - vmin);
-          html += '<div><i style="background:' + RAMP[i] + '"></i>' +
-                  fmt(from, meta.unit) + '</div>';
-        }
-      } else {
-        html += '<div><i style="background:' + RAMP[steps - 1] + '"></i>' +
-                fmt(vmax, meta.unit) + '</div>';
+  // ---- Palette picker ----
+  function buildPalettes() {
+    const box = document.getElementById('palettes');
+    box.innerHTML = '';
+    Object.keys(PALETTES).forEach(name => {
+      const el = document.createElement('div');
+      el.className = 'pal' + (name === currentPalette ? ' on' : '');
+      const sw = PALETTES[name].map(c => '<i style="background:' + c + '"></i>').join('');
+      el.innerHTML = '<div class="sw">' + sw + '</div><span>' + name + '</span>';
+      el.onclick = () => { currentPalette = name; buildPalettes(); drawMonthly(); };
+      box.appendChild(el);
+    });
+  }
+
+  // ---- Grille mensuelle ----
+  const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet',
+                  'Août','Septembre','Octobre','Novembre','Décembre'];
+  let monthlyData = null, miniMaps = [];
+
+  function fetchMonthly() {
+    const year = document.getElementById('year').value;
+    loadStats(year);
+    fetch("{% url 'dashboard:carte_monthly' %}?year=" + year)
+      .then(r => r.json()).then(data => { monthlyData = data; drawMonthly(); });
+  }
+
+  function drawMonthly() {
+    if (!monthlyData) return;
+    miniMaps.forEach(m => { try { m.remove(); } catch(e){} });
+    miniMaps = [];
+    const grid = document.getElementById('month-grid');
+    grid.innerHTML = '';
+
+    // échelle commune sur l'année (0-100 pour la complétude)
+    const vmin = 0, vmax = 100;
+    const anyGeom = monthlyData.months.some(mo => mo.geojson.features.some(f => f.geometry));
+    document.getElementById('monthly-empty').style.display = anyGeom ? 'none' : 'block';
+
+    monthlyData.months.forEach(mo => {
+      const card = document.createElement('div');
+      card.className = 'mcard' + (mo.has_data ? '' : ' empty');
+      const nat = mo.national === null ? '' : '<div class="nat">' + mo.national + ' %</div>';
+      card.innerHTML = '<div class="hd">' + MONTHS[mo.month-1] + ' ' + monthlyData.year + '</div>' +
+        (mo.has_data
+          ? '<div class="mini" id="mini-' + mo.month + '">' + nat + '</div>'
+          : '<div class="mini">Pas de données<br>pour cette période</div>');
+      grid.appendChild(card);
+
+      if (mo.has_data && anyGeom) {
+        const el = document.getElementById('mini-' + mo.month);
+        const mm = L.map(el, { zoomControl:false, attributionControl:false,
+                               dragging:false, scrollWheelZoom:false, doubleClickZoom:false,
+                               boxZoom:false, keyboard:false, tap:false });
+        const lyr = L.geoJSON(mo.geojson, {
+          style: f => ({ fillColor: colorFor(f.properties.value, vmin, vmax),
+                         fillOpacity: .9, color:'#fff', weight:.5 }),
+          onEachFeature: (f, l) => l.bindTooltip(
+            '<b>' + f.properties.name + '</b><br>' +
+            (f.properties.value === null ? 'aucune donnée' : f.properties.value + ' %'),
+            { className:'district', sticky:true })
+        }).addTo(mm);
+        try { mm.fitBounds(lyr.getBounds(), { padding:[4,4] }); } catch(e){}
+        miniMaps.push(mm);
       }
-      html += '<div><i style="background:#d9dee8"></i>aucune donnée</div>';
-      div.innerHTML = html;
-      return div;
-    };
-    legend.addTo(map);
+    });
   }
 
-  function load() {
-    const mode = document.getElementById('mode').value;
-    const params = new URLSearchParams({ mode: mode });
-    if (mode === 'indicator') params.set('indicator', document.getElementById('indicator').value);
-    else params.set('element', document.getElementById('element').value);
-    const period = document.getElementById('period').value;
-    if (period) params.set('period', period);
-
-    fetch(dataUrl + '?' + params.toString())
-      .then(r => r.json())
-      .then(geo => {
-        const msg = document.getElementById('msg');
-        const hasGeom = geo.features.some(f => f.geometry);
-        if (!hasGeom) {
-          msg.style.display = 'block';
-          msg.textContent = "Aucune frontière chargée. Lancez la commande load_boundaries.";
-          return;
-        }
-        msg.style.display = 'none';
-        if (layer) map.removeLayer(layer);
+  // ---- Carte par indicateur (plein format) ----
+  let bigMap = null, bigLayer = null, legend = null;
+  function ensureBigMap() {
+    if (bigMap) return;
+    bigMap = L.map('map', { scrollWheelZoom:true }).setView([8.6, 1.0], 7);
+  }
+  function fmt(v, unit){ if(v===null||v===undefined) return 'aucune donnée';
+    return (Math.round(v*100)/100).toLocaleString('fr-FR') + (unit?' '+unit:''); }
+  function drawLegend(meta){
+    if (legend) bigMap.removeControl(legend);
+    legend = L.control({ position:'bottomright' });
+    legend.onAdd = function(){
+      const div = L.DomUtil.create('div','map-legend');
+      let html = '<div class="title">' + meta.label + (meta.period?' — '+meta.period:'') + '</div>';
+      const R = ramp();
+      for (let i=0;i<R.length;i++){
+        const from = meta.vmin + (i/R.length)*(meta.vmax-meta.vmin);
+        html += '<div><i style="background:'+R[i]+'"></i>'+fmt(from, meta.unit)+'</div>';
+      }
+      html += '<div><i style="background:#e0e4ea"></i>aucune donnée</div>';
+      div.innerHTML = html; return div;
+    };
+    legend.addTo(bigMap);
+  }
+  function loadBig(){
+    ensureBigMap();
+    const mode = document.getElementById('imode').value;
+    const params = new URLSearchParams({ mode });
+    const per = document.getElementById('iperiod').value;
+    if (mode !== 'completude' && per) params.set('period', per);
+    fetch("{% url 'dashboard:carte_couche2_data' %}?" + params.toString())
+      .then(r => r.json()).then(geo => {
+        if (bigLayer) bigMap.removeLayer(bigLayer);
         const meta = geo.meta;
-        layer = L.geoJSON(geo, {
-          style: f => ({
-            fillColor: colorFor(f.properties.value, meta.vmin, meta.vmax),
-            fillOpacity: 0.85, color: '#fff', weight: 1,
-          }),
-          onEachFeature: (f, lyr) => {
-            lyr.bindTooltip(
-              '<b>' + f.properties.name + '</b><br>' + fmt(f.properties.value, meta.unit),
-              { className: 'district', sticky: true }
-            );
-            lyr.on('mouseover', e => e.target.setStyle({ weight: 2.5, color: '#1f3864' }));
-            lyr.on('mouseout',  e => layer.resetStyle(e.target));
-          },
-        }).addTo(map);
-        try { map.fitBounds(layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
+        bigLayer = L.geoJSON(geo, {
+          style: f => ({ fillColor: colorFor(f.properties.value, meta.vmin, meta.vmax),
+                         fillOpacity:.85, color:'#fff', weight:1 }),
+          onEachFeature: (f,l) => l.bindTooltip('<b>'+f.properties.name+'</b><br>'+fmt(f.properties.value, meta.unit),
+                                                { className:'district', sticky:true })
+        }).addTo(bigMap);
+        try { bigMap.fitBounds(bigLayer.getBounds(), { padding:[20,20] }); } catch(e){}
         drawLegend(meta);
-      })
-      .catch(() => {
-        const msg = document.getElementById('msg');
-        msg.style.display = 'block';
-        msg.textContent = "Erreur de chargement des données cartographiques.";
       });
   }
-
-  // Bascule volume / indicateur
-  document.getElementById('mode').addEventListener('change', function () {
-    const ind = this.value === 'indicator';
-    document.getElementById('indicator-field').style.display = ind ? 'flex' : 'none';
-    document.getElementById('element-field').style.display   = ind ? 'none' : 'flex';
+  document.getElementById('imode').addEventListener('change', function(){
+    document.getElementById('iperiod-fld').style.display = (this.value==='completude')?'none':'flex';
   });
-  document.getElementById('refresh').addEventListener('click', load);
+  document.getElementById('irefresh').addEventListener('click', loadBig);
+  document.getElementById('year').addEventListener('change', fetchMonthly);
 
-  // Premier rendu
-  load();
+  // ---- Onglets ----
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('on'));
+    this.classList.add('on');
+    const panel = document.getElementById('panel-' + this.dataset.tab);
+    panel.classList.add('on');
+    if (this.dataset.tab === 'indicateur') { ensureBigMap(); setTimeout(() => { bigMap.invalidateSize(); if(!bigLayer) loadBig(); }, 50); }
+    if (this.dataset.tab === 'mensuel') setTimeout(() => miniMaps.forEach(m => m.invalidateSize()), 50);
+  }));
+
+  // ---- Démarrage ----
+  buildPalettes();
+  fetchMonthly();
 })();
 </script>
 {% endblock %}

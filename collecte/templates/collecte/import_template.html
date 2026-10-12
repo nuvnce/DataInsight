@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Importer un modèle — DataInsight{% endblock %}
+{% block title_inner %}Importer un modèle rempli{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="{% url 'collecte:import_home' %}">Imports</a>
+  <span class="sep">›</span><span class="current">Importer un modèle</span></nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  input[type=file]{ padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; }
+  .field { margin-bottom:14px; }
+  .field label { display:block; font-size:13px; color:#556; margin-bottom:5px; font-weight:600; }
+  .check { display:flex; align-items:center; gap:8px; font-size:14px; margin-bottom:10px; }
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:10px; font-size:14px; }
+  .msg.success { background:#e6f4ea; color:#1e7a34; border:1px solid #b7e0c1; }
+  .msg.error { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .msg.warning { background:#fef7e6; color:#9a6700; border:1px solid #f5e2b3; }
+  .msg.info { background:#eaf0fb; color:#1f3864; border:1px solid #c3d3ef; }
+  .report .summary { display:flex; flex-wrap:wrap; margin-top:10px; }
+  .report .stat { flex:1; min-width:110px; padding:14px; text-align:center; border-right:1px solid #eef1f7; }
+  .report .stat .n { font-size:24px; font-weight:700; color:var(--navy); }
+  .report .stat .l { font-size:11px; color:#667; text-transform:uppercase; }
+  .hint { color:#667; font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+
+<div class="card">
+  <h2>Modèle de collecte rempli → base</h2>
+  <p class="hint">Charge un modèle (onglets Public / Privé, une ligne par district
+     et période). Les valeurs sont écrites en base, prêtes pour la fiabilisation.
+     Réimporter le même fichier met à jour, sans doublon.</p>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="field">
+      <label for="file">Fichier modèle (.xlsx)</label>
+      <input type="file" name="file" id="file" accept=".xlsx" required>
+    </div>
+    <label class="check"><input type="checkbox" name="dry_run" value="1"> Simulation (ne rien écrire)</label>
+    <button type="submit" class="btn">Importer</button>
+    <a href="{% url 'collecte:import_home' %}" class="btn secondary">Retour</a>
+  </form>
+
+  {% if report %}
+  <div class="report">
+    <div class="summary">
+      <div class="stat"><div class="n">{{ report.sheets|length }}</div><div class="l">onglets</div></div>
+      <div class="stat"><div class="n">{{ report.rows }}</div><div class="l">valeurs lues</div></div>
+      <div class="stat"><div class="n">{{ report.saved }}</div><div class="l">écrites</div></div>
+      <div class="stat"><div class="n">{{ report.unknown_districts|length }}</div><div class="l">districts inconnus</div></div>
+    </div>
+    {% if report.unknown_districts %}
+      <p class="hint" style="margin-top:10px;">Districts non reconnus :
+        {{ report.unknown_districts|join:", " }} — vérifie qu'ils existent dans la
+        hiérarchie (niveau 3) ou charge-la d'abord.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

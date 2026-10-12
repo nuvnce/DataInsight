@@ -11,5 +11,7 @@ urlpatterns = [
     path("import/", views.import_excel, name="import_excel"),
     path("import-souple/", views.import_flexible, name="import_flexible"),
     path("import-dhis2/", views.import_dhis2_page, name="import_dhis2"),
+    path("convertir-dhis2/", views.convert_dhis2_page, name="convert_dhis2"),
+    path("import-modele/", views.import_template_page, name="import_template"),
     path("import-population/", views.import_population_page, name="import_population"),
 ]

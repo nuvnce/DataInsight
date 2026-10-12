@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Statistiques — DataInsight{% endblock %}
+{% block title_inner %}Tableau de bord — récap par district{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><span class="current">Statistiques</span></nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .filters { display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; margin-bottom:4px; }
+  .filters label { display:block; font-size:12px; color:#556; margin-bottom:4px; font-weight:600; }
+  .filters select { padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; background:#fff; }
+  table.recap { font-size:12px; }
+  table.recap th, table.recap td { padding:6px 8px; }
+  .ind { font-weight:600; }
+  .ind.na { color:#aab; font-weight:400; }
+  .grp-fam { background:#26427a !important; }
+  .grp-ind { background:#C55A11 !important; }
+  tfoot td { font-weight:700; background:#eef1f8; }
+  .note { font-size:12px; color:#9a5a00; margin-top:8px; }
+  .empty { color:#667; padding:14px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <form method="get" class="filters">
+    <div>
+      <label for="period">Période</label>
+      <select name="period" id="period" onchange="this.form.submit()">
+        {% for p in periods %}
+          <option value="{{ p }}" {% if p == selected_period %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="secteur">Secteur</label>
+      <select name="secteur" id="secteur" onchange="this.form.submit()">
+        <option value="" {% if not secteur %}selected{% endif %}>Consolidé (Public + Privé)</option>
+        <option value="PUB" {% if secteur == 'PUB' %}selected{% endif %}>Public</option>
+        <option value="PRV" {% if secteur == 'PRV' %}selected{% endif %}>Privé</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Récapitulatif — {{ selected_period|default:"(aucune période)" }}</h2>
+  {% if has_data %}
+  <div style="overflow-x:auto;">
+  <table class="recap">
+    <thead>
+      <tr>
+        <th rowspan="2">District</th>
+        <th colspan="4" class="grp-fam">Cas</th>
+        <th colspan="2" class="grp-fam">TDR</th>
+        <th colspan="2" class="grp-fam">Gravité</th>
+        <th colspan="3" class="grp-ind">Indicateurs</th>
+      </tr>
+      <tr>
+        <th class="grp-fam">Suspects</th>
+        <th class="grp-fam">Confirmés</th>
+        <th class="grp-fam">Hospit.</th>
+        <th class="grp-fam">Décès</th>
+        <th class="grp-fam">Faits</th>
+        <th class="grp-fam">Positifs</th>
+        <th class="grp-fam">Graves</th>
+        <th class="grp-fam">Traités CTA</th>
+        <th class="grp-ind">Létalité %</th>
+        <th class="grp-ind">Positivité %</th>
+        <th class="grp-ind">Incidence ‰</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td style="text-align:left;">{{ r.district_name }}</td>
+        <td>{{ r.values.SUS }}</td>
+        <td>{{ r.values.CONF_TOT }}</td>
+        <td>{{ r.values.HOSP }}</td>
+        <td>{{ r.values.DECES }}</td>
+        <td>{{ r.values.TDR_FAIT }}</td>
+        <td>{{ r.values.TDR_POS }}</td>
+        <td>{{ r.values.CONF_GRAVE }}</td>
+        <td>{{ r.values.TRAITE_CTA }}</td>
+        <td class="ind {% if r.letalite is None %}na{% endif %}">{% if r.letalite is not None %}{{ r.letalite }}{% else %}—{% endif %}</td>
+        <td class="ind {% if r.positivite is None %}na{% endif %}">{% if r.positivite is not None %}{{ r.positivite }}{% else %}—{% endif %}</td>
+        <td class="ind {% if r.incidence is None %}na{% endif %}">{% if r.incidence is not None %}{{ r.incidence }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td style="text-align:left;">National</td>
+        <td>{{ totals.SUS }}</td>
+        <td>{{ totals.CONF_TOT }}</td>
+        <td>{{ totals.HOSP }}</td>
+        <td>{{ totals.DECES }}</td>
+        <td>{{ totals.TDR_FAIT }}</td>
+        <td>{{ totals.TDR_POS }}</td>
+        <td>{{ totals.CONF_GRAVE }}</td>
+        <td>{{ totals.TRAITE_CTA }}</td>
+        <td colspan="3" style="text-align:left; font-weight:400; color:#667;">
+          (indicateurs calculés par district ci-dessus)
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  <p class="note">⚠ La létalité est calculée sur les décès « toutes causes »
+     (choix de cadrage) — à lire comme létalité hospitalière toutes causes, non
+     spécifique paludisme.</p>
+  {% else %}
+  <p class="empty">Aucune donnée pour cette période. Importe des données
+     (Imports) puis fiabilise-les, et elles apparaîtront ici.</p>
+  {% endif %}
+</div>
+{% endblock %}

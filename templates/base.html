@@ -142,7 +142,7 @@
         <a href="{% url 'dashboard:carte' %}" class="{% if active == 'cartes' %}active{% endif %}">
           <span class="ico">◈</span> Cartes
         </a>
-        <a href="#" class="{% if active == 'stats' %}active{% endif %}">
+        <a href="{% url 'qualite:recap' %}" class="{% if active == 'stats' %}active{% endif %}">
           <span class="ico">∿</span> Statistiques
         </a>
         <div class="sep"></div>

@@ -38,8 +38,9 @@ from metadata.models import Category, CategoryOption, CategoryCombo, CategoryOpt
 MILIEUX = ("MILIEU", "Milieu", [
     ("COMM", "Communautaire (ASC)"),
     ("FS",   "Formation sanitaire (USP)"),
+    ("HOSP", "Hôpital (HD/HH)"),
+    ("AGG",  "Agrégé district (toutes sources)"),
     # Pour affiner plus tard, décommente / ajoute, par ex. :
-    # ("HD", "Hôpital de district"),
     # ("HR", "Hôpital de référence"),
 ])
 
