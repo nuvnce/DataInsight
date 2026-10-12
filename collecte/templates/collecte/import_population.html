@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Import Population — DataInsight{% endblock %}
+{% block title_inner %}Import Population{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{% url 'collecte:import_home' %}">Imports</a>
+  <span class="sep">›</span>
+  <span class="current">Population (RGPH)</span>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  input[type=file] { padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; }
+  .check { display:flex; align-items:center; gap:8px; font-size:14px; margin:12px 0; }
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:10px; font-size:14px; }
+  .msg.success { background:#e6f4ea; color:#1e7a34; border:1px solid #b7e0c1; }
+  .msg.error   { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .msg.warning { background:#fef7e6; color:#9a6700; border:1px solid #f5e2b3; }
+  .msg.info    { background:#eaf0fb; color:#1f3864; border:1px solid #c3d3ef; }
+  .report .summary { display:flex; flex-wrap:wrap; }
+  .report .stat { flex:1; min-width:130px; padding:14px; text-align:center; border-right:1px solid #eef1f7; }
+  .report .stat:last-child { border-right:none; }
+  .report .stat .n { font-size:24px; font-weight:700; color:var(--navy); }
+  .report .stat .l { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .report .stat.warn .n { color:var(--accent); }
+  details { margin-top:12px; }
+  summary { cursor:pointer; color:var(--blue); font-size:13px; }
+  .collist { font-size:13px; color:#556; max-height:200px; overflow:auto; margin-top:8px; }
+  .hint { color:var(--muted); font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+  {% if messages %}
+    {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+  {% endif %}
+
+  <div class="card">
+    <h2>Charger un fichier population</h2>
+    <p class="hint">
+      Fichier RGPH au format Excel. La population de chaque commune est agrégée
+      au district (niveau 3), pour les années projetées. Les districts sont
+      reconnus par leur nom. Un réimport ne crée pas de doublon.
+    </p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="file" name="file" accept=".xlsx" required>
+      <label class="check">
+        <input type="checkbox" name="dry_run" value="1">
+        Simulation seulement (ne rien enregistrer, juste vérifier les correspondances)
+      </label>
+      <button class="btn" type="submit">Importer</button>
+    </form>
+  </div>
+
+  {% if report %}
+    <div class="card">
+      <h2>Rapport d'import</h2>
+      <div class="report">
+        <div class="summary">
+          <div class="stat"><div class="n">{{ report.parsed_rows }}</div><div class="l">Lignes lues</div></div>
+          <div class="stat"><div class="n">{{ report.matched_districts }}</div><div class="l">Districts reconnus</div></div>
+          <div class="stat"><div class="n">{{ report.saved }}</div><div class="l">Lignes enregistrées</div></div>
+          <div class="stat {% if report.unmatched_districts %}warn{% endif %}">
+            <div class="n">{{ report.unmatched_districts|length }}</div>
+            <div class="l">Districts non reconnus</div>
+          </div>
+        </div>
+
+        {% if report.unmatched_districts %}
+          <details open>
+            <summary>Districts non reconnus ({{ report.unmatched_districts|length }})</summary>
+            <div class="collist">
+              {{ report.unmatched_districts|join:", " }}
+            </div>
+            <p class="hint" style="margin-top:8px;">
+              Ces noms n'ont pas trouvé de district correspondant en base. Vérifiez
+              que la hiérarchie DHIS2 a bien été importée, ou que les noms concordent.
+            </p>
+          </details>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

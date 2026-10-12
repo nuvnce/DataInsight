@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Tableau de bord — DataInsight{% endblock %}
+{% block title_inner %}Tableau de bord{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  .selectors { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .field label { font-size:13px; color:var(--blue); font-weight:600; }
+  select { padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; min-width:240px; }
+  .kpis { display:flex; gap:16px; margin-bottom:20px; }
+  .kpi { flex:1; background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:18px; text-align:center; }
+  .kpi .n { font-size:30px; font-weight:700; color:var(--navy); }
+  .kpi .l { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .charts { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width:800px){ .charts{ grid-template-columns:1fr; } }
+  .empty { color:var(--muted); font-size:14px; }
+  /* Sélecteur d'onglets de dashboard */
+  .dash-tabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid var(--line); flex-wrap:wrap; }
+  .dash-tabs a {
+    padding:10px 18px; text-decoration:none; color:var(--muted); font-size:14px;
+    font-weight:600; border-bottom:3px solid transparent; margin-bottom:-2px;
+  }
+  .dash-tabs a:hover { color:var(--blue); }
+  .dash-tabs a.active { color:var(--navy); border-bottom-color:var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="dash-tabs">
+    {% for d in dashboards %}
+      <a href="?dashboard={{ d.key }}{% if selected_de %}&element={{ selected_de.code }}{% endif %}{% if selected_ou %}&org_unit={{ selected_ou.id }}{% endif %}"
+         class="{% if current_dashboard.key == d.key %}active{% endif %}">{{ d.label }}</a>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h2>Filtres</h2>
+    <form method="get">
+      <input type="hidden" name="dashboard" value="{{ current_dashboard.key }}">
+      <div class="selectors">
+        <div class="field">
+          <label for="element">Indicateur</label>
+          <select name="element" id="element">
+            {% for de in elements %}
+              <option value="{{ de.code }}" {% if selected_de and selected_de.code == de.code %}selected{% endif %}>{{ de.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="org_unit">Périmètre (unité)</label>
+          <select name="org_unit" id="org_unit">
+            <option value="">— Toutes les unités —</option>
+            {% for ou in org_units %}
+              <option value="{{ ou.id }}" {% if selected_ou and selected_ou.id == ou.id %}selected{% endif %}>
+                {{ ou.name }} (niv. {{ ou.level }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn" type="submit">Afficher</button>
+      </div>
+    </form>
+  </div>
+
+  {% if has_data %}
+    <div class="kpis">
+      <div class="kpi"><div class="n">{{ grand_total|floatformat:0 }}</div><div class="l">Total ({{ selected_de.name }})</div></div>
+      <div class="kpi"><div class="n">{{ table_rows|length }}</div><div class="l">Unités avec données</div></div>
+      <div class="kpi"><div class="n">{{ periods|length }}</div><div class="l">Périodes</div></div>
+    </div>
+
+    <div class="card">
+      <h2>{{ selected_de.name }} — évolution et répartition</h2>
+      <div class="charts">
+        <div><canvas id="lineChart" height="220"></canvas></div>
+        <div><canvas id="barChart" height="220"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Tableau détaillé (unité × période)</h2>
+      <table>
+        <thead>
+          <tr><th>Unité d'organisation</th>{% for lbl in period_labels %}<th>{{ lbl }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for row in table_rows %}
+            <tr>
+              <td>{{ row.org_unit.name }}</td>
+              {% for c in row.cells %}<td>{{ c|default_if_none:"—"|floatformat:0 }}</td>{% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      const lineLabels = {{ chart_labels_json|safe }};
+      const lineData   = {{ chart_values_json|safe }};
+      const barLabels  = {{ bar_labels_json|safe }};
+      const barData    = {{ bar_values_json|safe }};
+      new Chart(document.getElementById('lineChart'), {
+        type:'line',
+        data:{ labels:lineLabels, datasets:[{ label:'{{ selected_de.name|escapejs }}', data:lineData,
+          borderColor:'#2E5496', backgroundColor:'rgba(46,84,150,.12)', fill:true, tension:.3 }]},
+        options:{ plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+      });
+      new Chart(document.getElementById('barChart'), {
+        type:'bar',
+        data:{ labels:barLabels, datasets:[{ label:'Total par unité', data:barData,
+          backgroundColor:'#C55A11' }]},
+        options:{ plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+      });
+    </script>
+  {% else %}
+    <div class="card"><p class="empty">Aucune donnée pour cette sélection. Saisissez ou importez des valeurs, puis revenez ici.</p></div>
+  {% endif %}
+{% endblock %}

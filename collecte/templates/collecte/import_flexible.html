@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Import souple — DataInsight{% endblock %}
+{% block title_inner %}Import souple{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="{% url 'collecte:import_home' %}">Imports</a><span class="sep">›</span><span class="current">Import souple</span></nav>
+{% endblock %}
+
+
+{% block extra_head %}
+<style>
+  .row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; }
+  .row .field { flex:1; min-width:200px; }
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:10px; font-size:14px; }
+  .msg.success { background:#e6f4ea; color:#1e7a34; border:1px solid #b7e0c1; }
+  .msg.error   { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .msg.warning { background:#fef7e6; color:#9a6700; border:1px solid #f5e2b3; }
+  .msg.info    { background:#eaf0fb; color:#1f3864; border:1px solid #c3d3ef; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; }
+  .badge.known { background:#e6f4ea; color:#1e7a34; }
+  .badge.unknown { background:#fef7e6; color:#9a6700; }
+  .report .summary { display:flex; }
+  .report .stat { flex:1; padding:14px; text-align:center; border-right:1px solid #eef1f7; }
+  .report .stat:last-child { border-right:none; }
+  .report .stat .n { font-size:26px; font-weight:700; color:var(--navy); }
+  .report .stat .l { font-size:12px; color:#667; text-transform:uppercase; }
+  .hint { color:#667; font-size:13px; }
+  .step-actions { margin-top:12px; display:flex; gap:10px; }
+  .col-action select { min-width:150px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+
+    {% if step == "upload" %}
+    <div class="card">
+      <h2>Import souple — fichier à colonnes libres</h2>
+      <p class="hint">Ce mode accepte des fichiers dont certaines colonnes ne correspondent pas
+        encore à un élément connu. Après analyse, vous déciderez quoi faire de chaque colonne inconnue
+        (créer un élément, ou l'ignorer). Réservé aux profils habilités.</p>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row">
+          <div class="field">
+            <label for="dataset">Formulaire (facultatif)</label>
+            <select name="dataset" id="dataset">
+              <option value="">— Aucun —</option>
+              {% for ds in datasets %}<option value="{{ ds.id }}">{{ ds.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="period">Période</label>
+            <select name="period" id="period">
+              <option value="">— Choisir —</option>
+              {% for code, lbl in period_choices %}<option value="{{ code }}">{{ lbl }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="file">Fichier .xlsx</label>
+          <input type="file" name="file" id="file" accept=".xlsx">
+        </div>
+        <button type="submit" name="analyze" value="1">Analyser le fichier</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if step == "review" %}
+    <div class="card">
+      <h2>Analyse : {{ n_known }} colonne(s) reconnue(s), {{ n_unknown }} inconnue(s)</h2>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="confirm" value="1">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="period" value="{{ selected_period }}">
+        {% if selected_dataset %}<input type="hidden" name="dataset" value="{{ selected_dataset.id }}">{% endif %}
+
+        {% if analysis.unknown %}
+          <p class="hint">Pour chaque colonne inconnue, choisissez une action. « Créer » ajoute un
+            nouvel élément de données (rattaché à la combinaison par défaut).</p>
+          <table>
+            <thead><tr><th>Colonne du fichier</th><th>Action</th><th>Nom de l'élément</th><th>Code</th></tr></thead>
+            <tbody>
+            {% for col in analysis.unknown %}
+              <tr>
+                <td>{{ col.header }} <span class="badge unknown">inconnue</span></td>
+                <td class="col-action">
+                  <select name="action_{{ col.index }}">
+                    <option value="create">Créer un élément</option>
+                    <option value="ignore">Ignorer cette colonne</option>
+                  </select>
+                </td>
+                <td><input type="text" name="name_{{ col.index }}" value="{{ col.header }}"></td>
+                <td><input type="text" name="code_{{ col.index }}" value="{{ col.de_code }}" placeholder="CODE_UNIQUE"></td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="msg success">Toutes les colonnes sont reconnues. Vous pouvez importer directement.</div>
+        {% endif %}
+
+        <div class="step-actions">
+          <a href="{% url 'collecte:import_flexible' %}"><button type="button" class="secondary">Annuler</button></a>
+          <button type="submit">Confirmer et importer</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if step == "done" and report %}
+    <div class="card">
+      <h2>Rapport d'import</h2>
+      <div class="report">
+        <div class="summary">
+          <div class="stat"><div class="n">{{ report.saved }}</div><div class="l">Enregistrées</div></div>
+          <div class="stat"><div class="n">{{ report.created_elements|length }}</div><div class="l">Éléments créés</div></div>
+          <div class="stat"><div class="n">{{ report.skipped }}</div><div class="l">Ignorées</div></div>
+          <div class="stat"><div class="n">{{ report.errors|length }}</div><div class="l">Erreurs</div></div>
+        </div>
+      </div>
+      {% if report.errors %}
+        <h3 style="color:var(--accent); font-size:13px;">Anomalies</h3>
+        <ul>{% for e in report.errors %}<li class="hint">{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+      <div class="step-actions">
+        <a href="{% url 'collecte:import_flexible' %}"><button type="button">Nouvel import</button></a>
+      </div>
+    </div>
+    {% endif %}
+{% endblock %}

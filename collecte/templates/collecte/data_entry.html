@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Saisie — DataInsight{% endblock %}
+{% block title_inner %}Saisie des données{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="{% url 'collecte:import_home' %}">Imports</a><span class="sep">›</span><span class="current">Saisie</span></nav>
+{% endblock %}
+
+
+{% block extra_head %}
+<style>
+  .elem-name { font-weight: 600; color: var(--navy); }
+  .elem-code { color: #889; font-size: 12px; font-weight: normal; }
+  .coc-label { color: #556; font-size: 13px; }
+  .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; }
+  .msg.success { background: #e6f4ea; color: #1e7a34; border: 1px solid #b7e0c1; }
+  .msg.error   { background: #fdecea; color: #b3261e; border: 1px solid #f5c2be; }
+  .hint { color: #667; font-size: 13px; margin-top: 4px; }
+  .toolbar { display: flex; gap: 10px; margin-top: 16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}
+      {% for message in messages %}
+        <div class="msg {{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="card">
+      <form method="get">
+        <div class="selectors">
+          <div class="field">
+            <label for="dataset">Formulaire</label>
+            <select name="dataset" id="dataset" onchange="this.form.submit()">
+              <option value="">— Saisie libre (tous les éléments) —</option>
+              {% for ds in datasets %}
+                <option value="{{ ds.id }}"
+                  {% if selected_dataset and selected_dataset.id == ds.id %}selected{% endif %}>
+                  {{ ds.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="org_unit">Unité d'organisation</label>
+            <select name="org_unit" id="org_unit" required>
+              <option value="">— Choisir —</option>
+              {% for ou in org_units %}
+                <option value="{{ ou.id }}"
+                  {% if selected_ou and selected_ou.id == ou.id %}selected{% endif %}>
+                  {{ ou.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="period">Période</label>
+            <select name="period" id="period" required>
+              <option value="">— Choisir —</option>
+              {% for code, lbl in period_choices %}
+                <option value="{{ code }}"
+                  {% if selected_period == code %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit">Afficher la grille</button>
+        </div>
+      </form>
+    </div>
+
+    {% if rows %}
+    <div class="card">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="org_unit" value="{{ selected_ou.id }}">
+        <input type="hidden" name="period" value="{{ selected_period }}">
+        {% if selected_dataset %}<input type="hidden" name="dataset" value="{{ selected_dataset.id }}">{% endif %}
+        <table>
+          <thead>
+            <tr>
+              <th style="width:45%">Élément de données</th>
+              <th>Désagrégation</th>
+              <th style="width:140px">Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              {% for cell in row.cells %}
+                <tr>
+                  {% if forloop.first %}
+                    <td rowspan="{{ row.cells|length }}">
+                      <span class="elem-name">{{ row.element.name }}</span><br>
+                      <span class="elem-code">{{ row.element.code }}</span>
+                    </td>
+                  {% endif %}
+                  <td class="coc-label">{{ cell.coc.name }}</td>
+                  <td>
+                    <input type="number" step="any" name="{{ cell.field_name }}"
+                           value="{{ cell.value }}" placeholder="—">
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="hint">Laissez une cellule vide pour ne pas saisir (ou effacer) une valeur.</p>
+        <div class="toolbar">
+          <button type="submit" name="save" value="1">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+    {% elif selected_ou %}
+      <div class="card"><p>Aucun élément de données à afficher.</p></div>
+    {% endif %}
+{% endblock %}

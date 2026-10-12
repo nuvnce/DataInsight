@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Imports — DataInsight{% endblock %}
+{% block title_inner %}Imports{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><span class="current">Imports</span></nav>
+{% endblock %}
+
+
+{% block extra_head %}
+<style>
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; }
+  .tile {
+    background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08);
+    padding:20px; display:flex; flex-direction:column; gap:10px;
+    border-top:3px solid var(--navy);
+  }
+  .tile.off { opacity:.6; border-top-color:#b8c1d6; }
+  .tile h3 { margin:0; color:var(--navy); font-size:15px; }
+  .tile p { margin:0; color:var(--muted); font-size:13px; flex:1; }
+  .tile .foot { margin-top:6px; }
+  .badge {
+    display:inline-block; font-size:11px; padding:3px 8px; border-radius:12px;
+    background:#eef2fa; color:var(--blue); font-weight:600;
+  }
+  .badge.soon { background:#f2ede6; color:var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Choisir un type d'import</h2>
+    <p class="muted">Chaque type de fichier a sa propre page et son propre rapport d'anomalies.</p>
+  </div>
+
+  <div class="tiles">
+    {% for t in types_import %}
+      <div class="tile {% if not t.dispo %}off{% endif %}">
+        <h3>{{ t.titre }}</h3>
+        <p>{{ t.desc }}</p>
+        <div class="foot">
+          {% if t.dispo %}
+            <a class="btn" href="{% url t.url_name %}">Ouvrir</a>
+          {% else %}
+            <span class="badge soon">Bientôt</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

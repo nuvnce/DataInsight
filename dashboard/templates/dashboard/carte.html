@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Cartes — DataInsight{% endblock %}
+{% block title_inner %}Cartographie{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+  .map-controls { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }
+  .map-controls .field { display:flex; flex-direction:column; gap:4px; }
+  .map-controls label { font-size:13px; color:var(--blue); font-weight:600; }
+  .map-controls select { padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; min-width:220px; }
+  #map { height:560px; border-radius:8px; border:1px solid var(--line); background:#fff; }
+  .map-legend {
+    background:#fff; padding:10px 12px; border-radius:6px; line-height:18px;
+    box-shadow:0 1px 4px rgba(0,0,0,.15); font-size:12px; color:#333;
+  }
+  .map-legend i { width:16px; height:16px; float:left; margin-right:8px; opacity:.85; }
+  .map-legend .title { font-weight:600; margin-bottom:6px; color:var(--navy); }
+  .leaflet-tooltip.district { font-size:13px; }
+  .leaflet-tooltip.district b { color:var(--navy); }
+  .map-empty { padding:14px; color:var(--muted); font-size:14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="map-controls">
+      <div class="field">
+        <label for="mode">Type de donnée</label>
+        <select id="mode">
+          <option value="volume">Volume (nombre)</option>
+          <option value="indicator">Indicateur (taux)</option>
+        </select>
+      </div>
+      <div class="field" id="element-field">
+        <label for="element">Élément</label>
+        <select id="element">
+          {% for de in elements %}<option value="{{ de.code }}">{{ de.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field" id="indicator-field" style="display:none;">
+        <label for="indicator">Indicateur</label>
+        <select id="indicator">
+          {% for ind in indicators %}<option value="{{ ind.code }}">{{ ind.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="period">Période</label>
+        <select id="period"><option value="">Toutes périodes</option></select>
+      </div>
+      <button class="btn" id="refresh">Afficher</button>
+    </div>
+    <div id="map"></div>
+    <div id="msg" class="map-empty" style="display:none;"></div>
+  </div>
+
+<script>
+(function () {
+  const map = L.map('map', { scrollWheelZoom: true }).setView([8.6, 1.0], 7);
+  // Fond neutre : pas de tuiles, juste un fond clair et les districts.
+  map.getContainer().style.background = '#eef1f7';
+
+  let layer = null;
+  const dataUrl = "{% url 'dashboard:carte_data' %}";
+
+  // Palette séquentielle (clair -> foncé) façon santé publique
+  const RAMP = ['#eef3fb', '#cfe0f3', '#9dc0e6', '#5f97d3', '#2e5496', '#1f3864'];
+
+  function colorFor(v, vmin, vmax) {
+    if (v === null || v === undefined) return '#d9dee8';   // gris = pas de donnée
+    if (vmax <= vmin) return RAMP[RAMP.length - 1];
+    const t = (v - vmin) / (vmax - vmin);
+    return RAMP[Math.min(RAMP.length - 1, Math.floor(t * RAMP.length))];
+  }
+
+  function fmt(v, unit) {
+    if (v === null || v === undefined) return 'aucune donnée';
+    const n = Math.round(v * (unit === '%' ? 10 : 1)) / (unit === '%' ? 10 : 1);
+    return n.toLocaleString('fr-FR') + (unit ? ' ' + unit : '');
+  }
+
+  let legend = null;
+  function drawLegend(meta) {
+    if (legend) map.removeControl(legend);
+    legend = L.control({ position: 'bottomright' });
+    legend.onAdd = function () {
+      const div = L.DomUtil.create('div', 'map-legend');
+      let html = '<div class="title">' + meta.label + '</div>';
+      const vmin = meta.vmin, vmax = meta.vmax, steps = RAMP.length;
+      if (vmax > vmin) {
+        for (let i = 0; i < steps; i++) {
+          const from = vmin + (i / steps) * (vmax - vmin);
+          html += '<div><i style="background:' + RAMP[i] + '"></i>' +
+                  fmt(from, meta.unit) + '</div>';
+        }
+      } else {
+        html += '<div><i style="background:' + RAMP[steps - 1] + '"></i>' +
+                fmt(vmax, meta.unit) + '</div>';
+      }
+      html += '<div><i style="background:#d9dee8"></i>aucune donnée</div>';
+      div.innerHTML = html;
+      return div;
+    };
+    legend.addTo(map);
+  }
+
+  function load() {
+    const mode = document.getElementById('mode').value;
+    const params = new URLSearchParams({ mode: mode });
+    if (mode === 'indicator') params.set('indicator', document.getElementById('indicator').value);
+    else params.set('element', document.getElementById('element').value);
+    const period = document.getElementById('period').value;
+    if (period) params.set('period', period);
+
+    fetch(dataUrl + '?' + params.toString())
+      .then(r => r.json())
+      .then(geo => {
+        const msg = document.getElementById('msg');
+        const hasGeom = geo.features.some(f => f.geometry);
+        if (!hasGeom) {
+          msg.style.display = 'block';
+          msg.textContent = "Aucune frontière chargée. Lancez la commande load_boundaries.";
+          return;
+        }
+        msg.style.display = 'none';
+        if (layer) map.removeLayer(layer);
+        const meta = geo.meta;
+        layer = L.geoJSON(geo, {
+          style: f => ({
+            fillColor: colorFor(f.properties.value, meta.vmin, meta.vmax),
+            fillOpacity: 0.85, color: '#fff', weight: 1,
+          }),
+          onEachFeature: (f, lyr) => {
+            lyr.bindTooltip(
+              '<b>' + f.properties.name + '</b><br>' + fmt(f.properties.value, meta.unit),
+              { className: 'district', sticky: true }
+            );
+            lyr.on('mouseover', e => e.target.setStyle({ weight: 2.5, color: '#1f3864' }));
+            lyr.on('mouseout',  e => layer.resetStyle(e.target));
+          },
+        }).addTo(map);
+        try { map.fitBounds(layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
+        drawLegend(meta);
+      })
+      .catch(() => {
+        const msg = document.getElementById('msg');
+        msg.style.display = 'block';
+        msg.textContent = "Erreur de chargement des données cartographiques.";
+      });
+  }
+
+  // Bascule volume / indicateur
+  document.getElementById('mode').addEventListener('change', function () {
+    const ind = this.value === 'indicator';
+    document.getElementById('indicator-field').style.display = ind ? 'flex' : 'none';
+    document.getElementById('element-field').style.display   = ind ? 'none' : 'flex';
+  });
+  document.getElementById('refresh').addEventListener('click', load);
+
+  // Premier rendu
+  load();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+asgiref==3.12.1
+Django==5.1.15
+sqlparse==0.6.0
+et-xmlfile==2.0.0
+openpyxl==3.1.5
+pandas==2.2.3
+
+# --- Chargement des frontières (commande load_boundaries uniquement) ---
+# Nécessaire seulement pour importer les shapefiles des districts.
+# Peut être lourd à installer sous Windows ; en cas de souci, utiliser la
+# voie de secours (chargement du GeoJSON préparé).
+geopandas==1.0.1
+
+# --- Production PostgreSQL / PostGIS (à décommenter le moment venu) ---
+# psycopg[binary]==3.2.3
+# djangorestframework==3.15.2

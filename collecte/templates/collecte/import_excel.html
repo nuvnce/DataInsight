@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Import strict — DataInsight{% endblock %}
+{% block title_inner %}Import par template{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb"><a href="{% url 'collecte:import_home' %}">Imports</a><span class="sep">›</span><span class="current">Import par template</span></nav>
+{% endblock %}
+
+
+{% block extra_head %}
+<style>
+  .row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; }
+  .row .field { flex:1; min-width:220px; }
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:10px; font-size:14px; }
+  .msg.success { background:#e6f4ea; color:#1e7a34; border:1px solid #b7e0c1; }
+  .msg.error   { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .msg.warning { background:#fef7e6; color:#9a6700; border:1px solid #f5e2b3; }
+  .msg.info    { background:#eaf0fb; color:#1f3864; border:1px solid #c3d3ef; }
+  .report { border:1px solid #e0e6f0; border-radius:8px; overflow:hidden; }
+  .report .summary { display:flex; gap:0; }
+  .report .stat { flex:1; padding:14px; text-align:center; border-right:1px solid #eef1f7; }
+  .report .stat:last-child { border-right:none; }
+  .report .stat .n { font-size:26px; font-weight:700; color:var(--navy); }
+  .report .stat .l { font-size:12px; color:#667; text-transform:uppercase; letter-spacing:.04em; }
+  .report .stat.err .n { color:var(--accent); }
+  .anomalies { padding:14px 18px; border-top:1px solid #eef1f7; }
+  .anomalies h3 { margin:8px 0 6px; font-size:13px; color:var(--accent); }
+  .anomalies ul { margin:0 0 8px; padding-left:20px; }
+  .anomalies li { font-size:13px; color:#444; margin:2px 0; }
+  .hint { color:#667; font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}
+      {% for message in messages %}
+        <div class="msg {{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="card">
+      <h2>1. Télécharger le modèle</h2>
+      <p class="hint">Choisissez un formulaire, téléchargez le modèle Excel, remplissez les valeurs, puis réimportez-le ci-dessous.</p>
+      <form method="get" action="{% url 'collecte:download_template' %}">
+        <div class="row">
+          <div class="field">
+            <label for="dataset_dl">Formulaire</label>
+            <select name="dataset" id="dataset_dl">
+              <option value="">— Saisie libre (tous les éléments) —</option>
+              {% for ds in datasets %}
+                <option value="{{ ds.id }}">{{ ds.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit">Télécharger le modèle .xlsx</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>2. Importer le fichier rempli</h2>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row">
+          <div class="field">
+            <label for="dataset">Formulaire</label>
+            <select name="dataset" id="dataset">
+              <option value="">— Saisie libre —</option>
+              {% for ds in datasets %}
+                <option value="{{ ds.id }}" {% if selected_dataset and selected_dataset.id == ds.id %}selected{% endif %}>{{ ds.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="period">Période</label>
+            <select name="period" id="period">
+              <option value="">— Choisir —</option>
+              {% for code, lbl in period_choices %}
+                <option value="{{ code }}" {% if selected_period == code %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="file">Fichier .xlsx</label>
+          <input type="file" name="file" id="file" accept=".xlsx">
+        </div>
+        <div class="row">
+          <button type="submit" name="dry_run" value="1" class="secondary">Simuler (sans enregistrer)</button>
+          <button type="submit" name="import" value="1">Importer</button>
+        </div>
+      </form>
+    </div>
+
+    {% if report %}
+    <div class="card">
+      <h2>Rapport d'import</h2>
+      <div class="report">
+        <div class="summary">
+          <div class="stat"><div class="n">{{ report.saved }}</div><div class="l">Enregistrées</div></div>
+          <div class="stat"><div class="n">{{ report.cleared }}</div><div class="l">Supprimées</div></div>
+          <div class="stat"><div class="n">{{ report.skipped }}</div><div class="l">Ignorées</div></div>
+          <div class="stat err"><div class="n">{{ report.errors|length }}</div><div class="l">Erreurs</div></div>
+        </div>
+        {% if report.errors or report.unknown_columns or report.unknown_org_units %}
+        <div class="anomalies">
+          {% if report.errors %}
+            <h3>Cellules en erreur</h3>
+            <ul>{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if report.unknown_columns %}
+            <h3>Colonnes non reconnues</h3>
+            <ul>{% for c in report.unknown_columns %}<li>{{ c }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if report.unknown_org_units %}
+            <h3>Unités d'organisation inconnues</h3>
+            <ul>{% for u in report.unknown_org_units %}<li>{{ u }}</li>{% endfor %}</ul>
+          {% endif %}
+        </div>
+        {% else %}
+          <div class="anomalies"><p class="hint">Aucune anomalie détectée.</p></div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+{% endblock %}

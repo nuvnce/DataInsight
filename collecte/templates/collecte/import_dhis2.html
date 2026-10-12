@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Import DHIS2 — DataInsight{% endblock %}
+{% block title_inner %}Import DHIS2{% endblock %}
+
+{% block extra_head %}
+<style>
+  input[type=file], input[type=text] { padding:8px 10px; border:1px solid #c3ccdd; border-radius:6px; font-size:14px; }
+  .check { display:flex; align-items:center; gap:8px; font-size:14px; margin-bottom:10px; }
+  .msg { padding:10px 14px; border-radius:6px; margin-bottom:10px; font-size:14px; }
+  .msg.success { background:#e6f4ea; color:#1e7a34; border:1px solid #b7e0c1; }
+  .msg.error { background:#fdecea; color:#b3261e; border:1px solid #f5c2be; }
+  .msg.warning { background:#fef7e6; color:#9a6700; border:1px solid #f5e2b3; }
+  .msg.info { background:#eaf0fb; color:#1f3864; border:1px solid #c3d3ef; }
+  .report .summary { display:flex; flex-wrap:wrap; }
+  .report .stat { flex:1; min-width:120px; padding:14px; text-align:center; border-right:1px solid #eef1f7; }
+  .report .stat .n { font-size:24px; font-weight:700; color:var(--navy); }
+  .report .stat .l { font-size:11px; color:#667; text-transform:uppercase; }
+  .report .stat.warn .n { color:var(--accent); }
+  details { margin-top:10px; }
+  summary { cursor:pointer; color:var(--blue); font-size:13px; }
+  .collist { font-size:12px; color:#556; max-height:180px; overflow:auto; margin-top:6px; }
+  .hint { color:#667; font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+
+    <div class="card">
+      <h2>Importer un export DHIS2 (format large)</h2>
+      <p class="hint">Charge une extraction DHIS2 : une ligne = période × unité, une colonne = un
+        indicateur désagrégé. Les colonnes sont analysées automatiquement (indicateur, milieu, âge, secteur).
+        Assurez-vous d'avoir lancé <code>seed_dimensions</code> au préalable.</p>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="field">
+          <label for="file">Fichier .xlsx</label>
+          <input type="file" name="file" id="file" accept=".xlsx">
+        </div>
+        <div class="field">
+          <label for="sheet_name">Nom de l'onglet (laisser vide = premier onglet)</label>
+          <input type="text" name="sheet_name" id="sheet_name" placeholder="data_plateau_savanes">
+        </div>
+        <label class="check"><input type="checkbox" name="create_ou" value="1" checked> Créer les unités (USP) absentes automatiquement</label>
+        <div style="display:flex; gap:10px; margin-top:8px;">
+          <button type="submit" name="dry_run" value="1" class="secondary">Simuler (analyser sans importer)</button>
+          <button type="submit" name="import" value="1">Importer</button>
+        </div>
+      </form>
+    </div>
+
+    {% if report %}
+    <div class="card">
+      <h2>Rapport d'import</h2>
+      <div class="report">
+        <div class="summary">
+          <div class="stat"><div class="n">{{ report.rows }}</div><div class="l">Lignes lues</div></div>
+          <div class="stat"><div class="n">{{ report.columns_ok }}</div><div class="l">Colonnes reconnues</div></div>
+          <div class="stat"><div class="n">{{ report.saved }}</div><div class="l">Valeurs importées</div></div>
+          <div class="stat warn"><div class="n">{{ report.columns_unknown|length }}</div><div class="l">Colonnes ignorées</div></div>
+        </div>
+      </div>
+
+      {% if report.columns_unknown %}
+      <details>
+        <summary>{{ report.columns_unknown|length }} colonnes non reconnues (indicateurs non définis — normal)</summary>
+        <div class="collist">{% for c in report.columns_unknown %}{{ c }}<br>{% endfor %}</div>
+      </details>
+      {% endif %}
+      {% if report.columns_missing_dim %}
+      <details>
+        <summary>{{ report.columns_missing_dim|length }} colonnes à dimension incomplète</summary>
+        <div class="collist">{% for c in report.columns_missing_dim %}{{ c }}<br>{% endfor %}</div>
+      </details>
+      {% endif %}
+      {% if report.unknown_org_units %}
+      <details>
+        <summary>{{ report.unknown_org_units|length }} unités inconnues (non importées)</summary>
+        <div class="collist">{% for u in report.unknown_org_units %}{{ u }}<br>{% endfor %}</div>
+      </details>
+      {% endif %}
+      {% if report.errors %}
+        <div class="msg error" style="margin-top:10px;">{% for e in report.errors %}{{ e }}<br>{% endfor %}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+{% endblock %}

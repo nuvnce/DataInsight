@@ -1,0 +1,60 @@
+# === DataInsight — fichiers à NE PAS versionner ===
+
+# --- Environnement Python ---
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Django ---
+# Base de données locale (contient de VRAIES données PNLP — jamais sur GitHub)
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+
+# Fichiers statiques collectés
+/staticfiles/
+/static_root/
+/media/
+
+# --- Secrets (CRITIQUE : ne jamais pousser) ---
+.env
+*.env
+!.env.example
+secret_key.txt
+
+# --- Données sensibles (santé publique — jamais sur GitHub) ---
+# Tout fichier de données réelles importé ou exporté
+*.xlsx
+*.xls
+*.csv
+!**/templates/**/*.csv
+/data/
+/imports/
+/exports/
+/uploads/
+/lots/
+*.rar
+*.zip
+*.tar.gz
+# Shapefiles (volumineux et parfois sous licence)
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.qmd
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+/logs/
